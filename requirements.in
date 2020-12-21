@@ -1,0 +1,8 @@
+sqlalchemy
+pytest
+testing.postgresql
+psycopg2-binary
+sqlparse
+black
+isort
+autoflake

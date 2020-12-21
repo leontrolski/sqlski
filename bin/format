@@ -1,0 +1,3 @@
+autoflake --in-place --remove-all-unused-imports --ignore-init-module-imports -r sqlski
+isort sqlski
+black --exclude '.env' .
