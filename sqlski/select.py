@@ -2,14 +2,16 @@ from collections import defaultdict
 from dataclasses import dataclass, fields
 from typing import Any, Dict, Iterator, List, Optional, Type, Union
 
-from sqlalchemy import Column, MetaData, Table
+from sqlalchemy import Column, Table
+from sqlalchemy.dialects.postgresql import base
 from sqlalchemy.engine import Connection
-from sqlalchemy.schema import CreateTable
+from sqlalchemy.schema import CreateColumn
 from sqlalchemy.sql import Alias, ClauseElement
 from sqlalchemy.sql import and_ as sa_and
 from sqlalchemy.sql import case, cast
 from sqlalchemy.sql import func as sa_func
 from sqlalchemy.sql import select as sa_select
+from sqlalchemy.sql.ddl import DDLElement
 
 from .composite import CompositeArray, CompositeType, register_psycopg2_composite
 from .types import (
@@ -26,6 +28,25 @@ from .types import (
     TypeToSubqueryMap,
     to_is_many_and_type,
 )
+
+
+def visit_create_temp_type(self, create):
+    cols = ",\n".join(self.process(CreateColumn(col)) for col in create.columns)
+    return f"""
+        DROP TYPE IF EXISTS pg_temp.{create.name} CASCADE;
+        CREATE TYPE pg_temp.{create.name} AS ({cols});
+    """
+
+
+# monkeypatch Postgres to allow creating temporary types
+base.PGDDLCompiler.visit_create_temp_type = visit_create_temp_type
+
+
+@dataclass
+class CreateType(DDLElement):
+    __visit_name__ = "create_temp_type"
+    name: str
+    columns: List[ClauseElement]
 
 
 def make_nested(
@@ -54,24 +75,13 @@ def make_nested(
         expression = expression.label(label)
         expression.type = sqlalchemy_type
 
-    temp_table = Table(
-        name,
-        MetaData(),
-        *column_types,
-        prefixes=["TEMPORARY"],
-        postgresql_on_commit="DROP",
-    )
-    create_type = CreateTable(temp_table)
-
     def register(conn: Connection) -> ClauseElement:
-        conn.execute(create_type)
+        conn.execute(CreateType(name, column_types))
         register_psycopg2_composite(conn, sqlalchemy_type)
-        return expression
 
     return Nested(
         sqlalchemy_type=sqlalchemy_type,
         expression=expression,
-        create_type=create_type,
         register=register,
     )
 

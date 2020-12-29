@@ -97,10 +97,9 @@ def test_two_levels_nested(conn):
     )
     expected = (Path(__file__).parent / "data/expected_query_1.sql").read_text()
     assert sub(sqlformat(extras.query)) == sub(expected)
-    with conn.begin():
-        for register in extras.registers:
-            register(conn)
-        actual = [from_row(Customer, row) for row in conn.execute(extras.query)]
+    for register in extras.registers:
+        register(conn)
+    actual = [from_row(Customer, row) for row in conn.execute(extras.query)]
 
     assert actual == expected_customers
 
@@ -143,14 +142,13 @@ def test_two_levels_nested(conn):
 
 def test_two_levels_with_helper(conn):
     insert_test_data(conn)
-    with conn.begin():
-        actual = do_select(
-            conn,
-            Customer,
-            filters=[
-                Customer.upper_cased_username == "HARRY",
-                Basket.basket_id == 3,
-            ],
-        )
+    actual = do_select(
+        conn,
+        Customer,
+        filters=[
+            Customer.upper_cased_username == "HARRY",
+            Basket.basket_id == 3,
+        ],
+    )
     actual = list(actual)
     assert actual == expected_customers

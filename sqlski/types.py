@@ -45,7 +45,6 @@ T = TypeVar("T")
 class Nested:
     sqlalchemy_type: CompositeType
     expression: ClauseElement
-    create_type: ClauseElement
     register: RegisterSqlType
 
 

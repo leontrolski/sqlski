@@ -1,27 +1,11 @@
 # Lovingly stolen from https://sqlalchemy-utils.readthedocs.io/en/latest/_modules/sqlalchemy_utils/types/pg_composite.html
 from collections import namedtuple
 
-from psycopg2.extensions import AsIs, adapt, register_adapter, register_type
+from psycopg2.extensions import register_type
 from psycopg2.extras import CompositeCaster
 from sqlalchemy.dialects.postgresql import ARRAY
-from sqlalchemy.dialects.postgresql.psycopg2 import PGDialect_psycopg2
-from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.sql import text
-from sqlalchemy.sql.expression import FunctionElement
-from sqlalchemy.types import SchemaType, TypeDecorator, UserDefinedType, to_instance
-
-
-class CompositeElement(FunctionElement):
-    def __init__(self, base, field, type_):
-        self.name = field
-        self.type = to_instance(type_)
-
-        super(CompositeElement, self).__init__(base)
-
-
-@compiles(CompositeElement)
-def _compile_pgelem(expr, compiler, **kw):
-    return "(%s).%s" % (compiler.process(expr.clauses, **kw), expr.name)
+from sqlalchemy.types import SchemaType, TypeDecorator, UserDefinedType
 
 
 class CompositeArray(ARRAY):
@@ -35,16 +19,6 @@ class CompositeArray(ARRAY):
 
 class CompositeType(UserDefinedType, SchemaType):
     python_type = tuple
-
-    class comparator_factory(UserDefinedType.Comparator):
-        def __getattr__(self, key):
-            try:
-                type_ = self.type.typemap[key]
-            except KeyError:
-                raise KeyError(
-                    "Type '%s' doesn't have an attribute: '%s'" % (self.name, key)
-                )
-            return CompositeElement(self.expr, key, type_)
 
     def __init__(self, name, columns):
         SchemaType.__init__(self)
@@ -125,35 +99,10 @@ def from_db(conn, tname):
     type_oid = recs[0][0]
     array_oid = recs[0][1]
     type_attrs = [(r[2], r[3]) for r in recs]
-
     return CompositeCaster(tname, type_oid, type_attrs, array_oid=array_oid)
 
 
 def register_psycopg2_composite(conn, composite):
     caster = from_db(conn, composite.name)
     register_type(caster.typecaster, conn.connection.connection)
-
-    if caster.array_typecaster is not None:
-        register_type(caster.array_typecaster, conn.connection.connection)
-
-    def adapt_composite(value):
-        adapted = [
-            adapt(
-                getattr(value, column.name)
-                if not isinstance(column.type, TypeDecorator)
-                else column.type.process_bind_param(
-                    getattr(value, column.name), PGDialect_psycopg2()
-                )
-            )
-            for column in composite.columns
-        ]
-        for value in adapted:
-            if hasattr(value, "prepare"):
-                value.prepare(conn.connection.connection)
-        values = [
-            value.getquoted().decode(conn.connection.connection.encoding)
-            for value in adapted
-        ]
-        return AsIs("(%s)::%s" % (", ".join(values), composite.name))
-
-    register_adapter(composite.type_cls, adapt_composite)
+    register_type(caster.array_typecaster, conn.connection.connection)

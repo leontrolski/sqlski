@@ -203,7 +203,7 @@ It is designed with the following positions in mind:
 - Not very well tested.
 - Missing lots of useful things like `ORDER BY`.
 - The `CAST(row(...) AS _type_foo` bits to achieve the nesting db-side is pretty mad, it has to:
-  - Create temporary tables for `_type_foo`, these require being in a transaction. (Give me transaction-scoped composite types please postgres!).
+  - Create temporary types on (the poorly documented) `pg_temp` for `_type_foo`.
   - Register these types with SQLAlchemy via some total wizardy (stolen from [sqlalchemy-utils](https://sqlalchemy-utils.readthedocs.io/en/latest/_modules/sqlalchemy_utils/types/pg_composite.html) ).
 - I haven't _really_ thought about `UPDATE`s/`DELETE`s, we can just SQLAlchemy core for that right?
 - The typing is a bit off, to get the project working properly with the current interface would require a `mypy` plugin (and is potentially an abuse of the type system full stop).
